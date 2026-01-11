@@ -16,7 +16,7 @@ from functools import total_ordering
 
 from gi.repository import GdkPixbuf
 from gi.repository import Gio
-from nbxmpp.const import PresenceShow
+from nbxmpp.const import PresenceShow, ConnectionType
 from nbxmpp.namespaces import Namespace
 from nbxmpp.protocol import JID
 from PIL import Image
@@ -1095,3 +1095,19 @@ TLS_VERSION_STRINGS = {
 
 RETRACTION_FALLBACK = (
     "/me retracted a previous message, but it's unsupported by your client.")
+
+@dataclass
+class IntelePacsServer:
+    domain: str
+    host: str
+    port: int = 5222
+    connection: ConnectionType = ConnectionType.START_TLS
+
+type ServerLabel = str
+
+INTELEPACS_SERVERS: dict[ServerLabel, IntelePacsServer] = {
+    'CDHB': IntelePacsServer(
+        domain='cdhb',
+        host='app-inteleradha-p.healthhub.health.nz',
+        ),
+}

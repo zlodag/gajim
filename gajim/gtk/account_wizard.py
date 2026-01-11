@@ -59,6 +59,7 @@ from gajim.gtk.util.misc import open_uri
 from gajim.gtk.util.styling import get_color_for_account
 from gajim.gtk.util.window import get_app_window
 from gajim.gtk.util.window import open_window
+from gajim.common.const import INTELEPACS_SERVERS
 
 CustomHostT = tuple[str, ConnectionProtocol, ConnectionType]
 
@@ -84,6 +85,8 @@ class AccountWizard(Assistant):
 
         self.add_pages(
             {
+                "account-type": WizardAccountTypePage(),
+                "login-intelepacs": WizardIntelePACSLoginPage(),
                 "login": WizardLoginPage(),
                 "signup": WizardSignupPage(),
                 "advanced": WizardAdvancedPage(),
@@ -99,6 +102,10 @@ class AccountWizard(Assistant):
 
         login_page = self.get_page("login")
         self._connect(login_page, "clicked", self._on_button_clicked)
+        account_type_page = self.get_page("account-type")
+        self._connect(account_type_page, "clicked", self._on_account_type_button_clicked)
+        login_intelepacs_page = self.get_page("login-intelepacs")
+        self._connect(login_intelepacs_page, "clicked", self._on_login_intelepacs_button_clicked)
         self._connect(self, "button-clicked", self._on_assistant_button_clicked)
         self._connect(self, "page-changed", self._on_page_changed)
 
@@ -106,6 +113,12 @@ class AccountWizard(Assistant):
 
     @overload
     def get_page(self, name: Literal["login"]) -> WizardLoginPage: ...
+
+    @overload
+    def get_page(self, name: Literal["account-type"]) -> WizardAccountTypePage: ...
+
+    @overload
+    def get_page(self, name: Literal["login-intelepacs"]) -> WizardIntelePACSLoginPage: ...
 
     @overload
     def get_page(self, name: Literal["signup"]) -> WizardSignupPage: ...
@@ -147,6 +160,21 @@ class AccountWizard(Assistant):
         elif button_name == "signup":
             self.get_page("signup").update_providers_list()
             self.show_page("signup", Gtk.StackTransitionType.SLIDE_LEFT)
+
+    def _on_account_type_button_clicked(self, _page: Gtk.Widget, button_name: str) -> None:
+        if button_name == "intelepacs":
+            self.show_page("login-intelepacs", Gtk.StackTransitionType.SLIDE_LEFT)
+
+        elif button_name == "xmpp":
+            self.show_page("login", Gtk.StackTransitionType.SLIDE_LEFT)
+
+    def _on_login_intelepacs_button_clicked(self, _page: Gtk.Widget, button_name: str) -> None:
+        if button_name == "login":
+            username, password, server_label = self.get_page("login-intelepacs").get_credentials()
+            server = INTELEPACS_SERVERS[server_label]
+            self.get_page("login").set_credentials(username, password, server.domain, True)
+            self.get_page("advanced").set_custom_host(server.host, server.port, server.connection)
+            self._test_credentials()
 
     def _on_assistant_button_clicked(
         self, _assistant: Assistant, button_name: str
@@ -220,6 +248,12 @@ class AccountWizard(Assistant):
         elif button_name == "back":
             if page == "signup":
                 self.show_page("login", Gtk.StackTransitionType.SLIDE_RIGHT)
+
+            elif page == "login":
+                self.show_page("account-type", Gtk.StackTransitionType.SLIDE_RIGHT)
+
+            elif page == "login-intelepacs":
+                self.show_page("account-type", Gtk.StackTransitionType.SLIDE_RIGHT)
 
             elif page in ("advanced", "error", "security-warning"):
                 if (
@@ -686,6 +720,110 @@ class WizardLoginPage(AssistantPage):
             self._log_in_password_entry.get_text(),
         )
 
+    def set_credentials(self, username: str, password: str, domain: str, advanced: bool) -> None:
+        self._log_in_address_entry.set_text(f'{username}@{domain}')
+        self._log_in_password_entry.set_text(password)
+        self._login_advanced_checkbutton.set_active(advanced)
+        self._set_complete()
+
+    def get_visible_buttons(self) -> list[str]:
+        return ["back"]
+
+
+@Gtk.Template(string=get_ui_string("wizard/account_type.ui"))
+class WizardAccountTypePage(AssistantPage):
+    __gtype_name__ = "WizardAccountType"
+    __gsignals__ = {
+        "clicked": (GObject.SignalFlags.RUN_LAST, None, (str,)),
+    }
+
+    _intelepacs_button: Gtk.Button = Gtk.Template.Child()
+    _xmpp_button: Gtk.Button = Gtk.Template.Child()
+
+    def __init__(self) -> None:
+        AssistantPage.__init__(self)
+        self.title = _("Choose account type")
+        self._connect(self._intelepacs_button, "clicked", self._on_intelepacs)
+        self._connect(self._xmpp_button, "clicked", self._on_xmpp)
+
+    def _on_intelepacs(self, *args: Any) -> None:
+        self.emit("clicked", "intelepacs")
+
+    def _on_xmpp(self, *args: Any) -> None:
+        self.emit("clicked", "xmpp")
+
+@Gtk.Template(string=get_ui_string("wizard/login_intelepacs.ui"))
+class WizardIntelePACSLoginPage(AssistantPage):
+    __gtype_name__ = "WizardIntelePACSLoginPage"
+    __gsignals__ = {
+        "clicked": (GObject.SignalFlags.RUN_LAST, None, (str,)),
+    }
+
+    _intelepacs_server_dropdown: GajimDropDown[str] = Gtk.Template.Child()
+    _intelepacs_username_entry: Gtk.Entry = Gtk.Template.Child()
+    _intelepacs_password_entry: Gtk.Entry = Gtk.Template.Child()
+    _intelepacs_log_in_button: Gtk.Button = Gtk.Template.Child()
+
+    def __init__(self) -> None:
+        AssistantPage.__init__(self)
+        self.title = _("Add IntelePACS account")
+        self._intelepacs_server_dropdown.set_data({'': 'Select a server'} | {key: key for key in INTELEPACS_SERVERS.keys()})
+        self._connect(self._intelepacs_server_dropdown, "notify::selected", self._on_intelepacs_server_dropdown_selected)
+
+        self._connect(
+            self._intelepacs_username_entry, "activate", self._on_intelepacs_username_activate
+        )
+        self._connect(self._intelepacs_username_entry, "changed", self._on_intelepacs_username_changed)
+        self._connect(self._intelepacs_password_entry, "changed", self._set_complete)
+        self._connect(
+            self._intelepacs_password_entry, "activate", self._on_intelepacs_password_entry_activate
+        )
+        self._connect(self._intelepacs_log_in_button, "clicked", self._on_login)
+
+    def _on_intelepacs_server_dropdown_selected(self, *args: Any) -> None:
+        self._set_complete()
+        if self._intelepacs_server_dropdown.get_selected_key():
+            if not self._intelepacs_username_entry.get_text():
+                GLib.idle_add(self._grab_username_entry_focus)
+            elif not self._intelepacs_password_entry.get_text():
+                GLib.idle_add(self._grab_password_entry_focus)
+
+    def _on_intelepacs_username_activate(self, _entry: Gtk.Entry) -> None:
+        GLib.idle_add(self._grab_password_entry_focus)
+    def _on_intelepacs_username_changed(self, entry: Gtk.Entry) -> None:
+        self._set_complete()
+    def _on_intelepacs_password_entry_activate(self, _entry: Gtk.Entry) -> None:
+        if self._intelepacs_log_in_button.get_sensitive():
+            self._intelepacs_log_in_button.activate()
+
+    def _grab_username_entry_focus(self) -> bool:
+        self._intelepacs_username_entry.grab_focus()
+        return False
+
+    def _grab_password_entry_focus(self) -> bool:
+        self._intelepacs_password_entry.grab_focus()
+        return False
+
+    def _set_complete(self, *args: Any) -> None:
+        server_chosen = bool(self._intelepacs_server_dropdown.get_selected_key())
+        self._intelepacs_username_entry.set_sensitive(server_chosen)
+        self._intelepacs_password_entry.set_sensitive(server_chosen)
+        username = self._intelepacs_username_entry.get_text()
+        password = self._intelepacs_password_entry.get_text()
+        self._intelepacs_log_in_button.set_sensitive(server_chosen and bool(username and password))
+
+    def _on_login(self, *args: Any) -> None:
+        self.emit("clicked", "login")
+
+    def get_visible_buttons(self) -> list[str]:
+        return ["back"]
+
+    def get_credentials(self) -> tuple[str, str, str]:
+        return (
+            self._intelepacs_username_entry.get_text(),
+            self._intelepacs_password_entry.get_text(),
+            self._intelepacs_server_dropdown.get_selected_key(),
+        )
 
 @Gtk.Template(string=get_ui_string("wizard/signup_page.ui"))
 class WizardSignupPage(AssistantPage):
@@ -937,7 +1075,7 @@ class WizardAdvancedPage(AssistantPage):
         self._connect(self._custom_host_entry, "changed", self._set_complete)
         self._connect(self._custom_port_entry, "changed", self._set_complete)
 
-        self._con_type_dropdown.set_data(["START TLS", "DIRECT TLS", "PLAIN"])
+        self._con_type_dropdown.set_data([connection_type.value for connection_type in ConnectionType])
 
         self.update_proxy_list()
 
@@ -958,6 +1096,12 @@ class WizardAdvancedPage(AssistantPage):
         key = self._proxies_dropdown.get_selected_key()
         assert key is not None
         return key
+
+    def set_custom_host(self, host: str, port: int, connection: ConnectionType) -> None:
+        self._con_type_dropdown.select_key(connection.value)
+        self._custom_host_entry.set_text(host)
+        self._custom_port_entry.set_text(str(port))
+        self._set_complete()
 
     def get_custom_host(self) -> CustomHostT | None:
         host = self._custom_host_entry.get_text()
