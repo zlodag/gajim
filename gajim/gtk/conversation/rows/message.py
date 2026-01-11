@@ -9,6 +9,7 @@ import textwrap
 from datetime import datetime
 from datetime import timedelta
 
+from gi.repository import Adw
 from gi.repository import GLib
 from gi.repository import Gtk
 from nbxmpp.namespaces import Namespace
@@ -45,6 +46,7 @@ from gajim.gtk.conversation.rows.widgets import NicknameLabel
 from gajim.gtk.menus import GajimMenu
 from gajim.gtk.menus import get_chat_row_menu
 from gajim.gtk.preview.geo import GeoPreviewWidget
+from gajim.gtk.preview.open_graph import OpenGraphPreviewWidget
 from gajim.gtk.preview.preview import PreviewWidget
 from gajim.gtk.referenced_message import ReferencedMessageNotFoundWidget
 from gajim.gtk.referenced_message import ReferencedMessageWidget
@@ -98,6 +100,10 @@ class MessageRow(BaseRow):
         self._meta_box.set_hexpand(True)
 
         self._bottom_box = Gtk.Box(spacing=6)
+
+        # halign START prevents the avatar popover menu from moving grid content,
+        # see https://dev.gajim.org/gajim/gajim/-/issues/12588
+        self.grid.set_halign(Gtk.Align.START)
 
         self.grid.attach(self._avatar_box, 0, 0, 1, 2)
         self.grid.attach(self._meta_box, 1, 0, 1, 1)
@@ -204,13 +210,30 @@ class MessageRow(BaseRow):
                     self._contact, referenced_message
                 )
 
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         if self._ref_message_widget is not None:
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
             box.append(self._ref_message_widget)
-            box.append(self._message_widget)
-            self._bottom_box.append(box)
-        else:
-            self._bottom_box.append(self._message_widget)
+
+        box.append(self._message_widget)
+
+        if message.og and self._contact.settings.get("enable_link_preview"):
+            og_box = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                margin_top=6,
+                spacing=6,
+            )
+            og_clamp = Adw.Clamp(
+                child=og_box,
+                maximum_size=500,
+                tightening_threshold=600,
+                halign=Gtk.Align.START,
+            )
+            for og in message.og:
+                og_box.append(OpenGraphPreviewWidget(og))
+
+            box.append(og_clamp)
+
+        self._bottom_box.append(box)
 
         self._set_text_direction(self.text)
 
