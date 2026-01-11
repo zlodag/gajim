@@ -60,7 +60,7 @@ ${MINGW_PACKAGE_PREFIX}-webp-pixbuf-loader \
 
 PYTHON_REQUIREMENTS="\
 git+https://dev.gajim.org/gajim/omemo-dr.git
-git+https://dev.gajim.org/gajim/python-nbxmpp.git
+git+https://github.com/zlodag/python-nbxmpp.git
 css_parser
 httpx[http2,socks]
 truststore

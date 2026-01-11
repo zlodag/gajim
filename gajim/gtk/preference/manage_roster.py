@@ -249,19 +249,20 @@ class ManageRoster(Gtk.Box, SignalManager, EventHelper):
 
     @event_filter(["account"])
     def _on_roster_push(self, event: RosterPush) -> None:
-        pos = 0
-        while item := cast(RosterListItem, self._model.get_item(pos)):
-            if item.jid == event.item.jid:
-                self._model.remove(pos)
-            else:
-                pos += 1
+        for roster_item in event.items:
+            pos = 0
+            while item := cast(RosterListItem, self._model.get_item(pos)):
+                if item.jid == roster_item.jid:
+                    self._model.remove(pos)
+                else:
+                    pos += 1
 
-        if event.item.subscription == "remove":
-            return
+            if roster_item.subscription == "remove":
+                return
 
-        groups = event.item.groups or {""}
-        for group in groups:
-            self._model.append(RosterListItem(event.item, group))
+            groups = roster_item.groups or {""}
+            for group in groups:
+                self._model.append(RosterListItem(roster_item, group))
 
     def _on_client_state_changed(
         self, _client: Client, _signal_name: str, state: SimpleClientState

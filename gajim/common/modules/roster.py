@@ -128,25 +128,26 @@ class Roster(BaseModule):
                              ) -> None:
         self._log.info('Push received')
         assert properties.roster is not None
-        item = properties.roster.item
-        if item.subscription == 'remove':
-            self._roster.pop(item.jid)
-        else:
-            self._roster[item.jid] = item
+        for item in properties.roster.items:
+            if item.subscription == 'remove':
+                self._roster.pop(item.jid)
+            else:
+                self._roster[item.jid] = item
 
         self._groups = None
         self._store_roster()
 
         self._log.info('New version: %s', properties.roster.version)
         app.settings.set_account_setting(self._account,
-                                         'roster_version',
-                                         properties.roster.version)
+                                        'roster_version',
+                                        properties.roster.version)
 
         app.ged.raise_event(RosterPush(account=self._account,
-                                       item=item))
+                                    items=properties.roster.items))
 
-        contact = self._con.get_module('Contacts').get_contact(item.jid)
-        contact.notify('nickname-update')
+        for item in properties.roster.items:
+            contact = self._con.get_module('Contacts').get_contact(item.jid)
+            contact.notify('nickname-update')
 
         raise nbxmpp.NodeProcessed
 

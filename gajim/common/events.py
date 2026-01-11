@@ -509,7 +509,7 @@ class RosterReceived(ApplicationEvent):
 class RosterPush(ApplicationEvent):
     name: str = field(init=False, default='roster-push')
     account: str
-    item: RosterItem
+    items: list[RosterItem]
 
 
 @dataclass
